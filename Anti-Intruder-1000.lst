@@ -1,0 +1,365 @@
+Anti-Intruder-1000                                                                                                      PAGE 1
+                         1     ;----------------------------------
+                         2     ; Anti Intruder 100
+                         3     ;----------------------------------
+                         4     CSEG AT 0H
+0000 020100              5     LJMP INIT
+                         6     ORG 100H
+                         7
+                         8     ; Eingabevektor
+  0020                   9     EINGANGSSIGNAL EQU 20H
+  0000                  10     A_FELD EQU EINGANGSSIGNAL.0
+  0002                  11     M_KNOPF1 EQU EINGANGSSIGNAL.2
+  0003                  12     M_KNOPF2 EQU EINGANGSSIGNAL.3
+  0004                  13     M_FELD EQU EINGANGSSIGNAL.4
+  0006                  14     SICHERHEITSKNOPF EQU EINGANGSSIGNAL.6
+                        15
+                        16     ; Ausgabevektor
+  0021                  17     AUSGANGSSIGNAL EQU 21H
+  0008                  18     AUSEN_TUER EQU AUSGANGSSIGNAL.0
+  0009                  19     INNEN_TUER EQU AUSGANGSSIGNAL.1
+  000F                  20     ALARM EQU AUSGANGSSIGNAL.7
+                        21
+                        22     ; Merker
+  0022                  23     ANFANGSZUSTAND EQU 22H
+  0023                  24     MERKER_TASTENFELD_AUSSEN_AN EQU 23H
+  0024                  25     MERKER_TASTENFELD_INNEN_AN EQU 24H
+                        26
+                        27     ; INITIALISIERUNG
+                        28     INIT:
+0100 7521FD             29     MOV AUSGANGSSIGNAL, #0FDH ; Bit 1 leuchtet
+0103 752000             30     MOV EINGANGSSIGNAL, #00H
+0106 7590FF             31     MOV P1, #0FFH
+                        32
+                        33     ;--------------------
+                        34     ; SCHLEIFE
+                        35     ;--------------------
+                        36     SCHLEIFE:
+0109 859020             37             MOV EINGANGSSIGNAL, P1
+010C 8521B0             38             MOV P3, AUSGANGSSIGNAL
+                        39
+                        40
+                        41     STATUS_WARTE_AUF_MITTE:
+                        42             CHECK_M_KNOPF1:
+010F 859020             43                     MOV EINGANGSSIGNAL, P1
+                        44
+0112 A202               45                     MOV C, M_KNOPF1
+0114 501D               46                     JNC STATUS_WARTE_AUF_MITTE_2 ; M_KNOPF1 ist gedrückt
+0116 020119             47                     LJMP CHECK_M_KNOPF2
+                        48             CHECK_M_KNOPF2:
+0119 859020             49                     MOV EINGANGSSIGNAL, P1
+                        50
+011C A203               51                     MOV C, M_KNOPF2 ; wenn Knopf 2 dann JMP zu MITTE_1
+011E 5003               52                     JNC STATUS_WARTE_AUF_MITTE_1 ; wenn kein Knopfdruck passiert, keine weitere Verarbeit
+0120 020109             53                     LJMP SCHLEIFE ; JA
+                        54
+                        55
+                        56     STATUS_WARTE_AUF_MITTE_1:
+                        57             ; START: Wait loop, time: 4 us
+                        58             ; Clock: 12000.0 kHz (12 / MC)
+                        59             ; Used registers: R0
+0123 7804               60             MOV     R0, #04h
+0125 00                 61             NOP
+0126 D8FE               62             DJNZ    R0, $
+0128 00                 63             NOP
+                        64             ;CHECK VON KNOPF 1 IM TIMER
+                        65             ; ODER ALARM
+                        66
+0129 859020             67             MOV EINGANGSSIGNAL, P1
+                        68
+012C A202               69             MOV C, M_KNOPF1
+012E 5013               70             JNC WARTE_AUF_DRITTEN
+0130 020109             71             LJMP SCHLEIFE
+                        72
+                        73     STATUS_WARTE_AUF_MITTE_2:
+                        74             ; START: Wait loop, time: 4 us
+                        75             ; Clock: 12000.0 kHz (12 / MC)
+                        76             ; Used registers: R0
+0133 7814               77             MOV     R0, #14h
+0135 00                 78             NOP
+0136 D8FE               79             DJNZ    R0, $
+0138 00                 80             NOP
+                        81             ;CHECK VON KNOPF 2 IM TIMER
+                        82             ; WEITER ZU CHECK KEYFELD
+                        83             ; ODER ALARM
+                        84
+0139 859020             85             MOV EINGANGSSIGNAL, P1
+                        86
+013C A203               87             MOV C, M_KNOPF2
+013E 5003               88             JNC WARTE_AUF_DRITTEN
+0140 020109             89             LJMP SCHLEIFE
+                        90
+                        91     WARTE_AUF_DRITTEN:
+                        92             ; START: Wait loop, time: 4 us
+                        93             ; Clock: 12000.0 kHz (12 / MC)
+                        94             ; Used registers: R0
+0143 7814               95             MOV     R0, #14h
+0145 00                 96             NOP
+0146 D8FE               97             DJNZ    R0, $
+0148 00                 98             NOP
+                        99
+0149 859020            100             MOV EINGANGSSIGNAL, P1
+                       101
+014C A200              102             MOV C, A_FELD ; Außenfeld wird gedrückt -> außen Tür auf
+014E 5030              103             JNC AUSEN_TUER_AUF
+                       104
+0150 A204              105             MOV C, M_FELD ; Vice versa
+0152 5022              106             JNC INNEN_TUER_AUF
+                       107
+0154 020157            108             LJMP ALARM_EINSCHALTEN ; Nicht erfolgreich -> springe zu schleife !!! ALARM AUSLÖSEN TODO
+                       109
+                       110
+                       111     ALARM_EINSCHALTEN: ; ALLE Türen zu
+0157 859020            112             MOV EINGANGSSIGNAL, P1
+                       113
+015A A206              114             MOV C, SICHERHEITSKNOPF
+015C 500C              115             JNC ALARM_AUSSCHALTEN
+                       116
+015E D208              117             SETB AUSEN_TUER
+0160 D209              118             SETB INNEN_TUER
+0162 C20F              119             CLR ALARM
+                       120
+0164 8521B0            121             MOV P3, AUSGANGSSIGNAL
+                       122
+0167 020157            123             LJMP ALARM_EINSCHALTEN
+                       124
+                       125     ALARM_AUSSCHALTEN:
+016A D208              126             SETB AUSEN_TUER
+016C C209              127             CLR INNEN_TUER
+016E D20F              128             SETB ALARM
+0170 7590FF            129             MOV P1, #0FFH
+                       130
+0173 020109            131             LJMP SCHLEIFE
+                       132
+                       133     INNEN_TUER_AUF: ; Außen zu Innen auf
+0176 D208              134             SETB AUSEN_TUER
+0178 C209              135             CLR INNEN_TUER
+017A 7590FF            136             MOV P1, #0FFH
+017D 020109            137             LJMP SCHLEIFE
+                       138
+                       139
+                       140     AUSEN_TUER_AUF: ; Außen auf Innen zu
+0180 D209              141             SETB INNEN_TUER
+0182 C208              142             CLR AUSEN_TUER
+0184 7590FF            143             MOV P1, #0FFH
+0187 020109            144             LJMP SCHLEIFE
+                       145
+                       146     ;-------------------
+                       147     ; Ausgabe
+                       148     ;-------------------
+                       149
+                       150
+                       151     ; SCHLEIFENENDE
+018A 020109            152     LJMP SCHLEIFE
+                       153     ;----------------
+                       154
+                       155     END
+ASSEMBLY COMPLETE, NO ERRORS FOUND, NO WARNINGS
+
+
+SYMBOL TABLE:
+??MCU_8051_IDE . . . . . . . . . . .  N  NUMB  8051H  NOT USED
+??VERSION. . . . . . . . . . . . . .  N  NUMB  0149H  NOT USED
+AC . . . . . . . . . . . . . . . . .  B  ADDR  00D6H  NOT USED
+ACC. . . . . . . . . . . . . . . . .  D  ADDR  00E0H  NOT USED
+ACSR . . . . . . . . . . . . . . . .  D  ADDR  0097H  NOT USED
+ADCF . . . . . . . . . . . . . . . .  D  ADDR  00F6H  NOT USED
+ADCLK. . . . . . . . . . . . . . . .  D  ADDR  00F2H  NOT USED
+ADCON. . . . . . . . . . . . . . . .  D  ADDR  00F3H  NOT USED
+ADDH . . . . . . . . . . . . . . . .  D  ADDR  00F5H  NOT USED
+ADDL . . . . . . . . . . . . . . . .  D  ADDR  00F4H  NOT USED
+ALARM. . . . . . . . . . . . . . . .  N  NUMB  000FH
+ALARM_AUSSCHALTEN. . . . . . . . . .  C  ADDR  016AH
+ALARM_EINSCHALTEN. . . . . . . . . .  C  ADDR  0157H
+ANFANGSZUSTAND . . . . . . . . . . .  N  NUMB  0022H  NOT USED
+AUSEN_TUER . . . . . . . . . . . . .  N  NUMB  0008H
+AUSEN_TUER_AUF . . . . . . . . . . .  C  ADDR  0180H
+AUSGANGSSIGNAL . . . . . . . . . . .  N  NUMB  0021H
+AUXR . . . . . . . . . . . . . . . .  D  ADDR  008EH  NOT USED
+AUXR1. . . . . . . . . . . . . . . .  D  ADDR  00A2H  NOT USED
+A_FELD . . . . . . . . . . . . . . .  N  NUMB  0000H
+B. . . . . . . . . . . . . . . . . .  D  ADDR  00F0H  NOT USED
+BDRCON . . . . . . . . . . . . . . .  D  ADDR  009BH  NOT USED
+BDRCON_1 . . . . . . . . . . . . . .  D  ADDR  009CH  NOT USED
+BRL. . . . . . . . . . . . . . . . .  D  ADDR  009AH  NOT USED
+CCAP0H . . . . . . . . . . . . . . .  D  ADDR  00FAH  NOT USED
+CCAP0L . . . . . . . . . . . . . . .  D  ADDR  00EAH  NOT USED
+CCAP1H . . . . . . . . . . . . . . .  D  ADDR  00FBH  NOT USED
+CCAP1L . . . . . . . . . . . . . . .  D  ADDR  00EBH  NOT USED
+CCAP2H . . . . . . . . . . . . . . .  D  ADDR  00FCH  NOT USED
+CCAP3H . . . . . . . . . . . . . . .  D  ADDR  00FDH  NOT USED
+CCAP4H . . . . . . . . . . . . . . .  D  ADDR  00FEH  NOT USED
+CCAPL2H. . . . . . . . . . . . . . .  D  ADDR  00FCH  NOT USED
+CCAPL2L. . . . . . . . . . . . . . .  D  ADDR  00ECH  NOT USED
+CCAPL3H. . . . . . . . . . . . . . .  D  ADDR  00FDH  NOT USED
+CCAPL3L. . . . . . . . . . . . . . .  D  ADDR  00EDH  NOT USED
+CCAPL4H. . . . . . . . . . . . . . .  D  ADDR  00FEH  NOT USED
+CCAPL4L. . . . . . . . . . . . . . .  D  ADDR  00EEH  NOT USED
+CCAPM0 . . . . . . . . . . . . . . .  D  ADDR  00DAH  NOT USED
+CCAPM1 . . . . . . . . . . . . . . .  D  ADDR  00DBH  NOT USED
+CCAPM2 . . . . . . . . . . . . . . .  D  ADDR  00DCH  NOT USED
+CCAPM3 . . . . . . . . . . . . . . .  D  ADDR  00DDH  NOT USED
+CCAPM4 . . . . . . . . . . . . . . .  D  ADDR  00DEH  NOT USED
+CCF0 . . . . . . . . . . . . . . . .  B  ADDR  00D8H  NOT USED
+CCF1 . . . . . . . . . . . . . . . .  B  ADDR  00D9H  NOT USED
+CCF2 . . . . . . . . . . . . . . . .  B  ADDR  00DAH  NOT USED
+CCF3 . . . . . . . . . . . . . . . .  B  ADDR  00DBH  NOT USED
+CCF4 . . . . . . . . . . . . . . . .  B  ADDR  00DCH  NOT USED
+CCON . . . . . . . . . . . . . . . .  D  ADDR  00D8H  NOT USED
+CFINT. . . . . . . . . . . . . . . .  C  ADDR  0033H  NOT USED
+CH . . . . . . . . . . . . . . . . .  D  ADDR  00F9H  NOT USED
+CHECK_M_KNOPF1 . . . . . . . . . . .  C  ADDR  010FH  NOT USED
+CHECK_M_KNOPF2 . . . . . . . . . . .  C  ADDR  0119H
+CKCON. . . . . . . . . . . . . . . .  D  ADDR  008FH  NOT USED
+CKCON0 . . . . . . . . . . . . . . .  D  ADDR  008FH  NOT USED
+CKRL . . . . . . . . . . . . . . . .  D  ADDR  0097H  NOT USED
+CKSEL. . . . . . . . . . . . . . . .  D  ADDR  0085H  NOT USED
+CL . . . . . . . . . . . . . . . . .  D  ADDR  00E9H  NOT USED
+CLKREG . . . . . . . . . . . . . . .  D  ADDR  008FH  NOT USED
+CMOD . . . . . . . . . . . . . . . .  D  ADDR  00D9H  NOT USED
+CPRL2. . . . . . . . . . . . . . . .  B  ADDR  00C8H  NOT USED
+CR . . . . . . . . . . . . . . . . .  B  ADDR  00DEH  NOT USED
+CT2. . . . . . . . . . . . . . . . .  B  ADDR  00C9H  NOT USED
+CY . . . . . . . . . . . . . . . . .  B  ADDR  00D7H  NOT USED
+DP0H . . . . . . . . . . . . . . . .  D  ADDR  0083H  NOT USED
+DP0L . . . . . . . . . . . . . . . .  D  ADDR  0082H  NOT USED
+DP1H . . . . . . . . . . . . . . . .  D  ADDR  0085H  NOT USED
+DP1L . . . . . . . . . . . . . . . .  D  ADDR  0084H  NOT USED
+DPH. . . . . . . . . . . . . . . . .  D  ADDR  0083H  NOT USED
+DPL. . . . . . . . . . . . . . . . .  D  ADDR  0082H  NOT USED
+EA . . . . . . . . . . . . . . . . .  B  ADDR  00AFH  NOT USED
+EC . . . . . . . . . . . . . . . . .  B  ADDR  00AEH  NOT USED
+EECON. . . . . . . . . . . . . . . .  D  ADDR  0096H  NOT USED
+EINGANGSSIGNAL . . . . . . . . . . .  N  NUMB  0020H
+ES . . . . . . . . . . . . . . . . .  B  ADDR  00ACH  NOT USED
+ET0. . . . . . . . . . . . . . . . .  B  ADDR  00A9H  NOT USED
+ET1. . . . . . . . . . . . . . . . .  B  ADDR  00ABH  NOT USED
+ET2. . . . . . . . . . . . . . . . .  B  ADDR  00ADH  NOT USED
+EX0. . . . . . . . . . . . . . . . .  B  ADDR  00A8H  NOT USED
+EX1. . . . . . . . . . . . . . . . .  B  ADDR  00AAH  NOT USED
+EXEN2. . . . . . . . . . . . . . . .  B  ADDR  00CBH  NOT USED
+EXF2 . . . . . . . . . . . . . . . .  B  ADDR  00CEH  NOT USED
+EXTI0. . . . . . . . . . . . . . . .  C  ADDR  0003H  NOT USED
+EXTI1. . . . . . . . . . . . . . . .  C  ADDR  0013H  NOT USED
+F0 . . . . . . . . . . . . . . . . .  B  ADDR  00D5H  NOT USED
+FE . . . . . . . . . . . . . . . . .  B  ADDR  009FH  NOT USED
+IE . . . . . . . . . . . . . . . . .  D  ADDR  00A8H  NOT USED
+IE0. . . . . . . . . . . . . . . . .  B  ADDR  0089H  NOT USED
+IE1. . . . . . . . . . . . . . . . .  B  ADDR  008BH  NOT USED
+INIT . . . . . . . . . . . . . . . .  C  ADDR  0100H
+INNEN_TUER . . . . . . . . . . . . .  N  NUMB  0009H
+INNEN_TUER_AUF . . . . . . . . . . .  C  ADDR  0176H
+INT0 . . . . . . . . . . . . . . . .  B  ADDR  00B2H  NOT USED
+INT1 . . . . . . . . . . . . . . . .  B  ADDR  00B3H  NOT USED
+IP . . . . . . . . . . . . . . . . .  D  ADDR  00B8H  NOT USED
+IPH. . . . . . . . . . . . . . . . .  D  ADDR  00B7H  NOT USED
+IPH0 . . . . . . . . . . . . . . . .  D  ADDR  00B7H  NOT USED
+IPH1 . . . . . . . . . . . . . . . .  D  ADDR  00B3H  NOT USED
+IPL0 . . . . . . . . . . . . . . . .  D  ADDR  00B8H  NOT USED
+IPL1 . . . . . . . . . . . . . . . .  D  ADDR  00B2H  NOT USED
+IT0. . . . . . . . . . . . . . . . .  B  ADDR  0088H  NOT USED
+IT1. . . . . . . . . . . . . . . . .  B  ADDR  008AH  NOT USED
+KBE. . . . . . . . . . . . . . . . .  D  ADDR  009DH  NOT USED
+KBF. . . . . . . . . . . . . . . . .  D  ADDR  009EH  NOT USED
+KBLS . . . . . . . . . . . . . . . .  D  ADDR  009CH  NOT USED
+MERKER_TASTENFELD_AUSSEN_AN. . . . .  N  NUMB  0023H  NOT USED
+MERKER_TASTENFELD_INNEN_AN . . . . .  N  NUMB  0024H  NOT USED
+M_FELD . . . . . . . . . . . . . . .  N  NUMB  0004H
+M_KNOPF1 . . . . . . . . . . . . . .  N  NUMB  0002H
+M_KNOPF2 . . . . . . . . . . . . . .  N  NUMB  0003H
+OSCCON . . . . . . . . . . . . . . .  D  ADDR  0086H  NOT USED
+OV . . . . . . . . . . . . . . . . .  B  ADDR  00D2H  NOT USED
+P. . . . . . . . . . . . . . . . . .  B  ADDR  00D0H  NOT USED
+P0 . . . . . . . . . . . . . . . . .  D  ADDR  0080H  NOT USED
+P1 . . . . . . . . . . . . . . . . .  D  ADDR  0090H
+P1M1 . . . . . . . . . . . . . . . .  D  ADDR  00D4H  NOT USED
+P1M2 . . . . . . . . . . . . . . . .  D  ADDR  00E2H  NOT USED
+P2 . . . . . . . . . . . . . . . . .  D  ADDR  00A0H  NOT USED
+P3 . . . . . . . . . . . . . . . . .  D  ADDR  00B0H
+P3M1 . . . . . . . . . . . . . . . .  D  ADDR  00D5H  NOT USED
+P3M2 . . . . . . . . . . . . . . . .  D  ADDR  00E3H  NOT USED
+P4 . . . . . . . . . . . . . . . . .  D  ADDR  00C0H  NOT USED
+P4M1 . . . . . . . . . . . . . . . .  D  ADDR  00D6H  NOT USED
+P4M2 . . . . . . . . . . . . . . . .  D  ADDR  00E4H  NOT USED
+P5 . . . . . . . . . . . . . . . . .  D  ADDR  00E8H  NOT USED
+PC . . . . . . . . . . . . . . . . .  B  ADDR  00BEH  NOT USED
+PCON . . . . . . . . . . . . . . . .  D  ADDR  0087H  NOT USED
+PPCL . . . . . . . . . . . . . . . .  B  ADDR  00BEH  NOT USED
+PS . . . . . . . . . . . . . . . . .  B  ADDR  00BCH  NOT USED
+PSL. . . . . . . . . . . . . . . . .  B  ADDR  00BCH  NOT USED
+PSW. . . . . . . . . . . . . . . . .  D  ADDR  00D0H  NOT USED
+PT0. . . . . . . . . . . . . . . . .  B  ADDR  00B9H  NOT USED
+PT0L . . . . . . . . . . . . . . . .  B  ADDR  00B9H  NOT USED
+PT1. . . . . . . . . . . . . . . . .  B  ADDR  00BBH  NOT USED
+PT1L . . . . . . . . . . . . . . . .  B  ADDR  00BBH  NOT USED
+PT2. . . . . . . . . . . . . . . . .  B  ADDR  00BDH  NOT USED
+PT2L . . . . . . . . . . . . . . . .  B  ADDR  00BDH  NOT USED
+PX0. . . . . . . . . . . . . . . . .  B  ADDR  00B8H  NOT USED
+PX0L . . . . . . . . . . . . . . . .  B  ADDR  00B8H  NOT USED
+PX1. . . . . . . . . . . . . . . . .  B  ADDR  00BAH  NOT USED
+PX1L . . . . . . . . . . . . . . . .  B  ADDR  00BAH  NOT USED
+RB8. . . . . . . . . . . . . . . . .  B  ADDR  009AH  NOT USED
+RCAP2H . . . . . . . . . . . . . . .  D  ADDR  00CBH  NOT USED
+RCAP2L . . . . . . . . . . . . . . .  D  ADDR  00CAH  NOT USED
+RCLK . . . . . . . . . . . . . . . .  B  ADDR  00CDH  NOT USED
+RD . . . . . . . . . . . . . . . . .  B  ADDR  00B7H  NOT USED
+REN. . . . . . . . . . . . . . . . .  B  ADDR  009CH  NOT USED
+RESET. . . . . . . . . . . . . . . .  C  ADDR  0000H  NOT USED
+RI . . . . . . . . . . . . . . . . .  B  ADDR  0098H  NOT USED
+RS0. . . . . . . . . . . . . . . . .  B  ADDR  00D3H  NOT USED
+RS1. . . . . . . . . . . . . . . . .  B  ADDR  00D4H  NOT USED
+RXD. . . . . . . . . . . . . . . . .  B  ADDR  00B0H  NOT USED
+SADDR. . . . . . . . . . . . . . . .  D  ADDR  00A9H  NOT USED
+SADDR_0. . . . . . . . . . . . . . .  D  ADDR  00A9H  NOT USED
+SADDR_1. . . . . . . . . . . . . . .  D  ADDR  00AAH  NOT USED
+SADEN. . . . . . . . . . . . . . . .  D  ADDR  00B9H  NOT USED
+SADEN_0. . . . . . . . . . . . . . .  D  ADDR  00B9H  NOT USED
+SADEN_1. . . . . . . . . . . . . . .  D  ADDR  00BAH  NOT USED
+SBUF . . . . . . . . . . . . . . . .  D  ADDR  0099H  NOT USED
+SCHLEIFE . . . . . . . . . . . . . .  C  ADDR  0109H
+SCON . . . . . . . . . . . . . . . .  D  ADDR  0098H  NOT USED
+SICHERHEITSKNOPF . . . . . . . . . .  N  NUMB  0006H
+SINT . . . . . . . . . . . . . . . .  C  ADDR  0023H  NOT USED
+SM0. . . . . . . . . . . . . . . . .  B  ADDR  009FH  NOT USED
+SM1. . . . . . . . . . . . . . . . .  B  ADDR  009EH  NOT USED
+SM2. . . . . . . . . . . . . . . . .  B  ADDR  009DH  NOT USED
+SP . . . . . . . . . . . . . . . . .  D  ADDR  0081H  NOT USED
+SPCON. . . . . . . . . . . . . . . .  D  ADDR  00C3H  NOT USED
+SPCR . . . . . . . . . . . . . . . .  D  ADDR  00D5H  NOT USED
+SPDAT. . . . . . . . . . . . . . . .  D  ADDR  00C5H  NOT USED
+SPDR . . . . . . . . . . . . . . . .  D  ADDR  0086H  NOT USED
+SPSR . . . . . . . . . . . . . . . .  D  ADDR  00AAH  NOT USED
+SPSTA. . . . . . . . . . . . . . . .  D  ADDR  00C4H  NOT USED
+STATUS_WARTE_AUF_MITTE . . . . . . .  C  ADDR  010FH  NOT USED
+STATUS_WARTE_AUF_MITTE_1 . . . . . .  C  ADDR  0123H
+STATUS_WARTE_AUF_MITTE_2 . . . . . .  C  ADDR  0133H
+T0 . . . . . . . . . . . . . . . . .  B  ADDR  00B4H  NOT USED
+T1 . . . . . . . . . . . . . . . . .  B  ADDR  00B5H  NOT USED
+T2CON. . . . . . . . . . . . . . . .  D  ADDR  00C8H  NOT USED
+T2MOD. . . . . . . . . . . . . . . .  D  ADDR  00C9H  NOT USED
+TB8. . . . . . . . . . . . . . . . .  B  ADDR  009BH  NOT USED
+TCLK . . . . . . . . . . . . . . . .  B  ADDR  00CCH  NOT USED
+TCON . . . . . . . . . . . . . . . .  D  ADDR  0088H  NOT USED
+TF0. . . . . . . . . . . . . . . . .  B  ADDR  008DH  NOT USED
+TF1. . . . . . . . . . . . . . . . .  B  ADDR  008FH  NOT USED
+TF2. . . . . . . . . . . . . . . . .  B  ADDR  00CFH  NOT USED
+TH0. . . . . . . . . . . . . . . . .  D  ADDR  008CH  NOT USED
+TH1. . . . . . . . . . . . . . . . .  D  ADDR  008DH  NOT USED
+TH2. . . . . . . . . . . . . . . . .  D  ADDR  00CDH  NOT USED
+TI . . . . . . . . . . . . . . . . .  B  ADDR  0099H  NOT USED
+TIMER0 . . . . . . . . . . . . . . .  C  ADDR  000BH  NOT USED
+TIMER1 . . . . . . . . . . . . . . .  C  ADDR  001BH  NOT USED
+TIMER2 . . . . . . . . . . . . . . .  C  ADDR  002BH  NOT USED
+TL0. . . . . . . . . . . . . . . . .  D  ADDR  008AH  NOT USED
+TL1. . . . . . . . . . . . . . . . .  D  ADDR  008BH  NOT USED
+TL2. . . . . . . . . . . . . . . . .  D  ADDR  00CCH  NOT USED
+TMOD . . . . . . . . . . . . . . . .  D  ADDR  0089H  NOT USED
+TR0. . . . . . . . . . . . . . . . .  B  ADDR  008CH  NOT USED
+TR1. . . . . . . . . . . . . . . . .  B  ADDR  008EH  NOT USED
+TR2. . . . . . . . . . . . . . . . .  B  ADDR  00CAH  NOT USED
+TXD. . . . . . . . . . . . . . . . .  B  ADDR  00B1H  NOT USED
+WARTE_AUF_DRITTEN. . . . . . . . . .  C  ADDR  0143H
+WDTCON . . . . . . . . . . . . . . .  D  ADDR  00A7H  NOT USED
+WDTPRG . . . . . . . . . . . . . . .  D  ADDR  00A7H  NOT USED
+WDTRST . . . . . . . . . . . . . . .  D  ADDR  00A6H  NOT USED
+WR . . . . . . . . . . . . . . . . .  B  ADDR  00B6H  NOT USED
